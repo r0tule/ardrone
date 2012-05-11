@@ -20,29 +20,32 @@
 */
 #include "pid.h"
 
-void pid_Init(pid_struct *pid, float kp, float ki, float kd, float i_max) 
+void pid_Init(SPid *pid, float pGain, float iGain, float dGain, float iMin, float iMax) 
 {
-	pid->kp=kp;
-	pid->ki=ki;
-	pid->kd=kd;
-	pid->i_max=i_max;
-	pid->i=0;
-	pid->e_prev=0;
+	pid->pGain=pGain;
+	pid->dGain=dGain;
+	pid->iGain=iGain;
+	pid->iMax=iMax;
+	pid->iMin=iMin;
+	pid->dState=0;
+	pid->iState=0;
 }
 
-float pid_CalcD(pid_struct *pid, float error, float dt, float d)
-{
-	pid->i += error * dt;
-	if(pid->i > pid->i_max) pid->i = pid->i_max;
-	if(pid->i < -pid->i_max) pid->i = -pid->i_max;
-	float out = pid->kp * error + pid->ki * pid->i + pid->kd * d;
-	pid->e_prev = error;
-	return out;
-}
+float UpdatePID(SPid * pid, float error, float dt, float position) {
+	float pTerm, dTerm, iTerm; 
+	pTerm = pid->pGain * error; // calculate the proportional term 
 
-float pid_Calc(pid_struct *pid, float error, float dt)
-{
-	return pid_CalcD(pid,  error, dt, (error - pid->e_prev)/dt);
+	// calculate the integral state with appropriate limiting 
+	pid->iState += error * dt; 
+	if (pid->iState > pid->iMax) 
+		pid->iState = pid->iMax; 
+	else if (pid->iState < pid->iMin)
+		pid->iState = pid->iMin; 
+
+	iTerm = pid->iGain * pid->iState; // calculate the integral term 
+	dTerm = pid->dGain * ((position - pid->dState)/dt); 
+	pid->dState = position; 
+	return pTerm + iTerm - dTerm; 
 }
 
 /*
@@ -57,31 +60,3 @@ start:
   wait(dt)
   goto start
 */
-
-/*
-typedef struct { 
-  double dState; // Last position input 
-  double iState; // Integrator state 
-  double iMax, iMin; // Maximum and minimum allowable integrator state 
-  double iGain, // integral gain 
-        pGain, // proportional gain 
-        dGain; // derivative gain 
-
-} SPid; 
-
-double UpdatePID(SPid * pid, double error, double position) {
-   double pTerm, dTerm, iTerm; 
-   pTerm = pid->pGain * error; // calculate the proportional term 
-
-  // calculate the integral state with appropriate limiting 
-  pid->iState += error; 
-  if (pid->iState > pid->iMax) 
-    pid->iState = pid->iMax; 
-  else if (pid->iState < pid->iMin)
-    pid->iState = pid->iMin; 
-
-  iTerm = pid->iGain * iState; // calculate the integral term 
-  dTerm = pid->dGain * (position - pid->dState); 
-  pid->dState = position; 
-  return pTerm + iTerm - dTerm; 
-}*/

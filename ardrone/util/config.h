@@ -1,5 +1,5 @@
 /*
-    controlthread.h - AR.Drone control thread
+    config.h - Config file for ardrone
 
     Copyright (C) 2011 Hugo Perquin - http://blog.perquin.com
 
@@ -18,12 +18,28 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
     MA 02110-1301 USA.
 */
-#ifndef _CONTROLTRHEAD_H
-#define _CONTROLTRHEAD_H
-int ctl_Init(char *client_addr);
-int ctl_FlatTrim();
-void ctl_SetSetpoint(float pitch, float roll, float yawsp, float h);
-void ctl_SetSetpointDiff(float pitch, float roll, float yaw, float h);
-void ctl_Close();
-void ctl_SetGas(float gas);
+
+#include "../util/type.h"
+#ifndef _CONFIG_H
+#define _CONFIG_H
+// Advanced configuration of drone comportment
+typedef struct {
+	// Configuration of PID values
+	float	iGain;
+	float	pGain;
+	float	dGain;
+	
+	bool	toMuchAngleActive;	// Should we cut the motors on too much angle
+	u16		angleMax;			// Maximum angle of drone before cut-off
+} configAdvanced;
+
+typedef struct  {
+	float	yawSpeed;			// Maximum yaw speed of the drone ( rad/s )
+	u16		verticalSpeed;		// Maximum vertical speed of the drone
+	u16		translationAngle;	// Maximum angle on translations
+} configFlight;
+
+
+configAdvanced getAdvancedConfig ();
+int getSectionStart(FILE* f);
 #endif

@@ -23,4 +23,6 @@
 typedef unsigned int           u32;
 typedef unsigned short int     u16;
 typedef unsigned char          u08;
+#define true 1 
+#define false 0 
 #endif

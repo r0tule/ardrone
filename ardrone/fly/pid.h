@@ -28,7 +28,18 @@ struct pid_struct
 	float i_max;
 };
 
-void pid_Init(pid_struct *pid, float kp, float ki, float kd, float i_max);
-float pid_Calc(pid_struct *pid, float error, float dt);
-float pid_CalcD(pid_struct *pid, float error, float dt, float d);
 
+typedef struct { 
+  float dState; // Last position input 
+  float iState; // Integrator state 
+  float iMax, iMin; // Maximum and minimum allowable integrator state 
+  float iGain, // integral gain 
+        pGain, // proportional gain 
+        dGain; // derivative gain 
+
+} SPid; 
+
+void pid_Init(SPid *pid, float pGain, float iGain, float dGain, float iMin, float iMax);
+//float pid_Calc(pid_struct *pid, float error, float dt);
+//float pid_CalcD(pid_struct *pid, float error, float dt, float d);
+float UpdatePID(SPid * pid, float error, float dt, float position);

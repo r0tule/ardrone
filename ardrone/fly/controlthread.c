@@ -38,18 +38,17 @@
 #include "pid.h"
 #include "controlthread.h"
 
-      float adj_roll;
-      float adj_pitch;
-      float adj_yaw;
-      float adj_h;
-
+float adj_roll;
+float adj_pitch;
+float adj_yaw;
+float adj_h;
 
 pthread_t ctl_thread;
 
-pid_struct pid_roll;
-pid_struct pid_pitch;
-pid_struct pid_yaw;
-pid_struct pid_h;
+SPid pid_roll;
+SPid pid_pitch;
+SPid pid_yaw;
+SPid pid_h;
 
 float throttle;
 
@@ -76,33 +75,38 @@ void *ctl_thread_main(void* data);
 int ctl_Init(char *client_addr) 
 {
 	int rc;
-  
+
 	//defaults from AR.Drone app:  pitch,roll max=12deg; yawspeed max=100deg/sec; height limit=on; vertical speed max=700mm/sec; 
 	setpoint.pitch_roll_max=DEG2RAD(12); //degrees     
-  //setpoint.yawsp_max=DEG2RAD(100); //degrees/sec
-  setpoint.h_max=600; //cm
-  setpoint.h_min=40; //cm
-  setpoint.throttle_hover=0.66;
-  setpoint.throttle_min=0.50;
-  setpoint.throttle_max=0.85;
-  			
+	//setpoint.yawsp_max=DEG2RAD(100); //degrees/sec
+	setpoint.h_max=600; //cm
+	setpoint.h_min=40; //cm
+	setpoint.throttle_hover=0.66;
+	setpoint.throttle_min=0.50;
+	setpoint.throttle_max=0.85;
+
 	//init pid pitch/roll 
-	pid_Init(&pid_roll,  0.50,0,0,0);
-	pid_Init(&pid_pitch, 0.50,0,0,0);
-	pid_Init(&pid_yaw,   1.00,0,0,0);
-	pid_Init(&pid_h,     0.0005,0,0,0);
+	pid_Init(&pid_roll,  0.5,1,0,0,0);
+	pid_Init(&pid_pitch, 0.5,1,0,0,0);
+	pid_Init(&pid_yaw,   1,1,0,0,0);
+	pid_Init(&pid_h,     0.5,0,0,0,0);
+	/*
+	pid_Init(&pid_roll,  0.5,1,0.1,0,10);
+	pid_Init(&pid_pitch, 0.5,1,0.1,0,10);
+	pid_Init(&pid_yaw,   1,1,0.1,0,10);
+	pid_Init(&pid_h,     0.0005,1,0.1,0,10); 
+*/
+	throttle=0.00;
 
-  throttle=0.00;
-
-  //Attitude Estimate
+	//Attitude Estimate
 	rc = att_Init(&att);
 	if(rc) return rc;
 
-  
-  //udp logger
-  udpClient_Init(&udpNavLog, client_addr, 7778);
-  navLog_Send();
-  printf("udpClient_Init\n", rc);
+
+	//udp logger
+	udpClient_Init(&udpNavLog, client_addr, 7778);
+	navLog_Send();
+	printf("udpClient_Init\n", rc);
   
 	//start motor thread
 	rc = mot_Init();
@@ -135,45 +139,45 @@ void *ctl_thread_main(void* data)
 			if(rc!=1) printf("ctl_thread_main: att_GetSample return code=%d",rc); 
 		}
 		
-    float motor[4];    
-    if(setpoint.h==0.00) {
-      //motors off
-      adj_roll = 0;
-      adj_pitch = 0;
-      adj_h = 0;
-      adj_yaw = 0;
-      throttle = 0;
-    }else{     
-      //flying, calc pid controller corrections
-      adj_roll  = pid_CalcD(&pid_roll,  setpoint.roll   - att.roll,  att.dt, att.gx); //err positive = need to roll right
-      adj_pitch = pid_CalcD(&pid_pitch, setpoint.pitch  - att.pitch, att.dt, att.gy); //err positive = need to pitch down
-      adj_yaw   = pid_CalcD(&pid_yaw,   setpoint.yaw    - att.yaw,   att.dt, att.gz); //err positive = need to increase yaw to the left
-      adj_h     = pid_CalcD(&pid_h,     setpoint.h      - att.h,     att.dt, att.hv); //err positive = need to increase height
-      
-      throttle = setpoint.throttle_hover + adj_h;
-      if(throttle < setpoint.throttle_min) throttle = setpoint.throttle_min;
-      if(throttle > setpoint.throttle_max) throttle = setpoint.throttle_max;      
-    }
-    
-    //convert pid adjustments to motor values
-    motor[0] = throttle +adj_roll -adj_pitch +adj_yaw;
-    motor[1] = throttle -adj_roll -adj_pitch -adj_yaw;
-    motor[2] = throttle -adj_roll +adj_pitch +adj_yaw;
-    motor[3] = throttle +adj_roll +adj_pitch -adj_yaw;
+		float motor[4];    
+		if(setpoint.h==0.00) {
+			//motors off
+			adj_roll = 0;
+			adj_pitch = 0;
+			adj_h = 0;
+			adj_yaw = 0;
+			throttle = 0;
+		}else{     
+			//flying, calc pid controller corrections	  
+			adj_roll  = UpdatePID(&pid_roll,  setpoint.roll   - att.roll,  att.dt, att.gx); //err positive = need to roll right
+			adj_pitch = UpdatePID(&pid_pitch, setpoint.pitch  - att.pitch, att.dt, att.gy); //err positive = need to pitch down
+			adj_yaw   = UpdatePID(&pid_yaw,   setpoint.yaw    - att.yaw,   att.dt, att.gz); //err positive = need to increase yaw to the left
+			adj_h     = UpdatePID(&pid_h,     setpoint.h      - att.h,     att.dt, att.hv); //err positive = need to increase height
 
-    //send to motors
-    mot_Run(motor[0],motor[1],motor[2],motor[3]);
-        
-    //blink leds    
-    cnt++;
-    if((cnt%200)==0) 
-      mot_SetLeds(MOT_LEDGREEN,MOT_LEDGREEN,MOT_LEDGREEN,MOT_LEDGREEN);
-    else if((cnt%200)==100) 
-      mot_SetLeds(0,0,0,0);
-        
-    //send UDP nav log packet    
-    navLog_Send();
-  
+			throttle = setpoint.throttle_hover + adj_h;
+			if(throttle < setpoint.throttle_min) throttle = setpoint.throttle_min;
+			if(throttle > setpoint.throttle_max) throttle = setpoint.throttle_max;      
+		}
+		
+		//convert pid adjustments to motor values
+		motor[0] = throttle +adj_roll -adj_pitch +adj_yaw;
+		motor[1] = throttle -adj_roll -adj_pitch -adj_yaw;
+		motor[2] = throttle -adj_roll +adj_pitch +adj_yaw;
+		motor[3] = throttle +adj_roll +adj_pitch -adj_yaw;
+
+		//send to motors
+		mot_Run(motor[0],motor[1],motor[2],motor[3]);
+			
+		//blink leds    
+		cnt++;
+		if((cnt%200)==0) 
+			mot_SetLeds(MOT_LEDGREEN,MOT_LEDGREEN,MOT_LEDGREEN,MOT_LEDGREEN);
+		else if((cnt%200)==100) 
+			mot_SetLeds(0,0,0,0);
+			
+		//send UDP nav log packet    
+		navLog_Send();
+	  
 		//yield to other threads
 		pthread_yield();
 	}
